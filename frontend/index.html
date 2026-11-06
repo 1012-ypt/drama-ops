@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0d0f17">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI运营台">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<title>AI 运营工作台 · 视频号剧目分佣</title>
+<script>
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+let deferredInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;});
+function installApp(){
+  if(deferredInstall){deferredInstall.prompt();deferredInstall.userChoice.then(()=>deferredInstall=null);return;}
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const inStandalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(inStandalone){alert('已经安装好啦，直接从主屏幕图标进入即可');return;}
+  alert(ios
+    ?'安装方法：\n1. 点击 Safari 底部「分享」按钮\n2. 选择「添加到主屏幕」\n3. 点「添加」，桌面出现 AI运营台 图标'
+    :'安装方法：\n1. 点击浏览器右上角菜单（⋮）\n2. 选择「安装应用」或「添加到主屏幕」\n3. 桌面出现 AI运营台 图标');
+}
+</script>
+<style>
+:root{
+  --bg:#0d0f17;--card:#171a26;--card2:#1d2130;--line:#262b3d;
+  --txt:#e8eaf0;--dim:#8b90a5;--accent:#ff7847;
+  --green:#34d399;--yellow:#fbbf24;--red:#f87171;--cyan:#22d3ee;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#262b3d;border-radius:4px}
+button{font-family:inherit}
+.mono{font-family:"SF Mono",Consolas,monospace}
+.dim{color:var(--dim)}.mini{font-size:11px;color:var(--dim)}
+.empty{color:var(--dim);text-align:center;padding:40px 12px}
+
+/* ================= 布局骨架 ================= */
+.sidebar{position:fixed;top:0;left:0;width:200px;height:100vh;background:#11141f;
+  border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:60;transition:transform .25s}
+.logo{padding:18px 16px 14px;border-bottom:1px solid var(--line)}
+.logo-t{font-size:16px;font-weight:700;letter-spacing:.5px}
+.logo-t em{color:var(--accent);font-style:normal}
+.logo-s{font-size:11px;color:var(--dim);margin-top:2px}
+#nav{flex:1;overflow-y:auto;padding:10px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;cursor:pointer;
+  color:var(--dim);font-size:13.5px;border-left:3px solid transparent;user-select:none}
+.nav-item .ic{width:20px;text-align:center;font-size:15px}
+.nav-item:hover{color:var(--txt);background:#ffffff06}
+.nav-item.on{color:#fff;background:#1a1e2c;border-left-color:var(--accent)}
+.side-foot{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.badge{font-size:10.5px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--dim);
+  display:inline-block;width:fit-content}
+.badge.on{color:var(--green);border-color:var(--green)}
+.badge.warn{color:var(--yellow);border-color:var(--yellow)}
+
+.main{margin-left:200px;padding:24px 28px 48px;max-width:1180px}
+.topbar{display:none}
+.overlay{display:none}
+
+/* ================= 通用组件 ================= */
+.page-h{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.page-h h2{font-size:20px;font-weight:700}
+.page-h .sub{color:var(--dim);font-size:12px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.card h3{font-size:14px;margin-bottom:10px;font-weight:600}
+.card-t{font-size:13px;color:var(--dim);font-weight:600;letter-spacing:1px;margin-bottom:12px}
+.btn{background:var(--card2);border:1px solid var(--line);color:var(--txt);padding:0 16px;height:38px;
+  border-radius:10px;cursor:pointer;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.1);color:#fff}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:6px;background:#232839;color:#9aa3bd;
+  margin:2px 4px 2px 0;white-space:nowrap}
+.tag.hook{background:#312e81;color:#c7d2fe}.tag.drama{background:#134e4a;color:#99f6e4}
+.tag.boom{background:#7f1d1d;color:#fca5a5}.tag.tracking{background:#78350f;color:#fcd34d}
+.tag.done{background:#14532d;color:#86efac}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+pre{white-space:pre-wrap;font-size:12px;color:#aab3c8;background:#121522;border-radius:8px;padding:10px;margin:8px 0;font-family:inherit}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.kpi .v{font-size:24px;font-weight:700;font-family:"SF Mono",Consolas,monospace;line-height:1.25}
+.kpi .l{color:var(--dim);font-size:12px;margin-top:2px}
+.kpi .s{font-size:10.5px;color:var(--dim);margin-top:2px}
+
+/* 流水线 */
+.flow{display:flex;gap:8px;flex-wrap:wrap}
+.step{flex:1;min-width:140px;background:var(--card2);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;font-size:12px;color:var(--dim)}
+.step b{display:block;color:var(--txt);font-size:12.5px;margin-bottom:2px}
+.step.done{border-color:#14532d;color:#86efac}
+.step.done b{color:#86efac}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,120,71,.45)}50%{box-shadow:0 0 0 7px rgba(255,120,71,0)}}
+.step.flowing{animation:pulse 1.4s infinite;border-color:var(--accent);color:var(--accent)}
+
+/* 角色状态行 */
+.agent{display:flex;gap:12px;padding:12px 10px;border-radius:12px;cursor:pointer;border:1px solid transparent;transition:.15s;align-items:center}
+.agent:hover{background:var(--card2);border-color:var(--line)}
+.agent .av{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#0d0f17;flex-shrink:0;font-size:16px}
+.agent .nm{font-weight:600;font-size:13.5px}
+.agent .st{color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 告警 */
+.alert-item{padding:11px 13px;border-left:3px solid var(--yellow);background:var(--card2);
+  border-radius:0 10px 10px 0;margin-bottom:8px;font-size:13px;cursor:pointer}
+.alert-item.critical{border-color:var(--red)}.alert-item.info{border-color:var(--cyan)}
+.alert-item.unread{box-shadow:inset 0 0 0 1px #ff784766}
+.alert-item .uread{color:var(--accent);font-size:10px;border:1px solid var(--accent);border-radius:99px;padding:0 7px;margin-left:6px}
+
+/* 表格（桌面端） */
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);font-weight:500;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:12px;white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #ffffff08;vertical-align:middle}
+tr:hover td{background:#ffffff04}
+.cover{width:34px;height:46px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff9}
+.vtitle{display:flex;gap:10px;align-items:center}
+.vtitle .t{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+
+/* 移动端卡片列表 */
+.vcard{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.vcard .cover{width:52px;height:70px;border-radius:10px;font-size:11px}
+.vcard .vt{font-weight:600;font-size:14px;line-height:1.4}
+.vstats{display:flex;gap:8px;margin-top:8px}
+.vstat{flex:1;background:var(--card2);border-radius:8px;padding:6px 4px;text-align:center}
+.vstat .n{font-family:"SF Mono",Consolas,monospace;font-weight:700;font-size:13px}
+.vstat .d{font-size:10px;color:var(--dim)}
+
+/* 群聊 */
+.chatwrap{display:flex;flex-direction:column;height:calc(100vh - 168px);min-height:380px}
+.gmsgs{flex:1;overflow-y:auto;min-height:0;padding:6px 4px}
+.gmsg{display:flex;gap:10px;margin-bottom:16px}
+.gav{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#0d0f17;flex-shrink:0;font-size:15px}
+.gbody{flex:1;min-width:0}
+.gname{font-size:11.5px;color:var(--dim);margin-bottom:4px}
+.gname b{color:var(--txt);margin-right:6px;font-size:13px}
+.gbubble{background:var(--card2);border:1px solid var(--line);border-radius:4px 14px 14px 14px;
+  padding:10px 13px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;width:fit-content;max-width:100%}
+.gboss{flex-direction:row-reverse}
+.gboss .gbubble{background:#3d2a1e;border-color:#5a3b26;border-radius:14px 4px 14px 14px;margin-left:auto}
+.gboss .gname{text-align:right}
+details.think{margin-bottom:6px;font-size:11px}
+details.think summary{cursor:pointer;color:var(--cyan);padding:4px 0}
+details.think pre{margin:6px 0 0;font-size:11px;color:var(--dim)}
+.atchips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 10px}
+.atchip{font-size:12px;padding:7px 14px;border-radius:99px;border:1px solid var(--line);cursor:pointer;color:var(--dim);min-height:34px}
+.atchip:hover{color:var(--accent);border-color:var(--accent)}
+.chatbar{display:flex;gap:8px}
+.chat-input{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--txt);
+  padding:10px 13px;font-size:14px;outline:none;min-height:42px}
+.chat-input:focus{border-color:var(--accent)}
+.hint{color:var(--dim);font-size:11px;margin-top:8px;text-align:center}
+
+/* 私聊抽屉 */
+.drawer{position:fixed;top:0;right:-500px;width:460px;height:100vh;background:var(--card);
+  border-left:1px solid var(--line);transition:.25s;z-index:80;padding:18px;display:flex;flex-direction:column}
+.drawer.open{right:0}
+.dtab{padding:7px 16px;border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--dim);border:1px solid transparent;min-height:34px}
+.dtab.on{background:var(--card2);color:var(--accent);border-color:var(--line)}
+.chatbox{flex:1;overflow-y:auto;min-height:0;padding:8px 0}
+.msg{max-width:86%;padding:9px 13px;border-radius:14px;margin-bottom:10px;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.msg.user{margin-left:auto;background:#3d2a1e;border:1px solid #5a3b26;border-bottom-right-radius:4px}
+.msg.agent{background:var(--card2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg .t{font-size:10px;color:var(--dim);margin-top:4px}
+.log{padding:9px 0;border-bottom:1px solid #ffffff0a;font-size:12px}
+.log .a{color:var(--cyan);font-weight:600}
+
+/* 角色中心大卡 */
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.acard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;cursor:pointer;transition:.15s}
+.acard:hover{border-color:var(--accent);transform:translateY(-2px)}
+.acard .av{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#0d0f17;font-size:22px}
+button.act{font-size:12.5px;padding:8px 16px;border-radius:9px;border:1px solid var(--line);
+  background:transparent;color:var(--txt);cursor:pointer;margin:6px 8px 0 0;min-height:38px}
+button.act.pub:hover{border-color:var(--green);color:var(--green)}
+button.act.drop:hover{border-color:var(--red);color:var(--red)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#232839;border:1px solid var(--accent);
+  color:var(--txt);padding:10px 20px;border-radius:99px;font-size:13px;z-index:99;opacity:0;transition:.25s;pointer-events:none}
+.toast.show{opacity:1}
+.only-m{display:none}
+
+/* ================= 移动端 ================= */
+@media(max-width:860px){
+  .sidebar{transform:translateX(-100%);width:240px;box-shadow:0 0 40px #000a}
+  .sidebar.open{transform:translateX(0)}
+  .overlay{display:block;position:fixed;inset:0;background:#000000a0;z-index:55;opacity:0;pointer-events:none;transition:.25s}
+  .overlay.show{opacity:1;pointer-events:auto}
+  .topbar{display:flex;position:sticky;top:0;z-index:50;background:#11141ff0;backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);align-items:center;gap:12px;padding:0 14px;height:52px}
+  .topbar .logo-t{font-size:15px}
+  .hamb{background:none;border:none;color:var(--txt);font-size:20px;cursor:pointer;width:40px;height:40px;
+    display:flex;align-items:center;justify-content:center}
+  .main{margin-left:0;padding:14px 12px 40px}
+  .page-h h2{font-size:18px}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi{padding:12px 13px}
+  .kpi .v{font-size:19px}
+  .step{flex:1 1 44%;min-width:0}
+  .only-d{display:none!important}
+  .only-m{display:block}
+  .chatwrap{height:calc(100vh - 52px - 160px);min-height:320px}
+  .drawer{width:100vw;right:-100vw;padding:14px;border-left:none}
+  .agrid{grid-template-columns:1fr}
+  .btn{height:40px}
+}
+@media(min-width:861px){.only-m{display:none!important}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="logo">
+    <div class="logo-t"><em>AI</em> 运营工作台</div>
+    <div class="logo-s">视频号剧目分佣</div>
+  </div>
+  <nav id="nav"></nav>
+  <div class="side-foot">
+    <button class="btn pri" id="installBtn" onclick="installApp()" style="padding:9px;font-size:13px">📲 安装 App</button>
+    <span class="badge" id="collectorMode">数据源：…</span>
+    <span class="badge" id="llmBadge">LLM：…</span>
+  </div>
+</aside>
+<div class="overlay" id="overlay" onclick="closeNav()"></div>
+
+<div class="topbar">
+  <button class="hamb" onclick="openNav()" aria-label="菜单">☰</button>
+  <div class="logo-t"><em style="color:var(--accent);font-style:normal">AI</em> 运营工作台</div>
+  <span style="flex:1"></span>
+  <button class="btn pri" onclick="installApp()" style="padding:6px 12px;font-size:13px">📲 安装</button>
+  <span class="badge warn" id="pipeBadgeM" style="display:none">执行中</span>
+</div>
+
+<main class="main" id="page"></main>
+
+<div class="drawer" id="drawer">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <b id="drawerTitle"></b>
+    <button class="btn" onclick="closeDrawer()">关闭</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:10px">
+    <div class="dtab on" id="dtabChat" onclick="drawerTab('chat')">💬 对话</div>
+    <div class="dtab" id="dtabLog" onclick="drawerTab('log')">运行日志</div>
+  </div>
+  <div id="chatPane" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="chatbox" id="chatBox"></div>
+    <div class="chatbar">
+      <input class="chat-input" id="chatInput" placeholder="问他：今天有什么发现？/ 帮我出条内容…"
+             onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="btn primary" onclick="sendChat()">发送</button>
+    </div>
+  </div>
+  <div id="logPane" style="display:none;overflow-y:auto;flex:1"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+async function J(u,opt){const r=await fetch(u,opt);return r.json();}
+function esc(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function fmt(n){n=+n||0;return n>=10000?(n/10000).toFixed(1)+'w':(Number.isInteger(n)?n:(Math.round(n*100)/100));}
+function ts(s){return (s||'').slice(5,16);}
+function spark(vals,color){
+  if(!vals||!vals.length)return'';
+  const w=90,h=26,mx=Math.max(...vals,1),mn=Math.min(...vals);
+  const pts=vals.map((v,i)=>`${(i*(w/(vals.length-1||1))).toFixed(1)},${(h-3-((v-mn)/(mx-mn||1))*(h-6)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${color||'#ff7847'}" stroke-width="1.8"/></svg>`;}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* ================= 角色元信息 ================= */
+const ROLE_META={
+  supervisor:{name:'主管',color:'#fbbf24',ch:'主',duty:'统筹·早会·异常同步'},
+  benchmark:{name:'全网对标专员',color:'#22d3ee',ch:'全',duty:'同行巡检·72h追踪·滞后爆款'},
+  deconstruct:{name:'爆款拆解专员',color:'#c084fc',ch:'爆',duty:'爆款拆解·交叉验证'},
+  content:{name:'内容生成专员',color:'#34d399',ch:'内',duty:'脚本·标题·发布建议'},
+  strategy:{name:'策略迭代专员',color:'#fb7185',ch:'策',duty:'新剧预案·淘汰低效策略'},
+};
+const FLOW=[
+  {step:'对标日报+跨天复盘',agent:'benchmark'},
+  {step:'主管早会·同步异动',agent:'supervisor'},
+  {step:'自有爆款拆解',agent:'deconstruct'},
+  {step:'当日内容产出',agent:'content'},
+  {step:'新剧预案更新',agent:'strategy'},
+  {step:'发布分成复盘',agent:'content'},
+  {step:'有效经验入库',agent:'strategy'},
+];
+
+/* ================= 路由 ================= */
+const MENUS=[
+  ['chat','💬','团队群聊'],
+  ['dashboard','📊','今日作战台'],
+  ['ledger','🎯','对标库'],
+  ['tracking','📈','跨天追踪'],
+  ['teardown','✂️','爆款拆解'],
+  ['content','📝','内容生产'],
+  ['plans','🧭','策略预案'],
+  ['revenue','💰','分成看板'],
+  ['experience','📚','经验库'],
+  ['agents','👥','角色中心'],
+  ['integration','⚙️','数据接入'],
+];
+let route='dashboard';
+$('nav').innerHTML=MENUS.map(([r,ic,t])=>
+  `<div class="nav-item" data-r="${r}" onclick="go('${r}')"><span class="ic">${ic}</span>${t}</div>`).join('');
+function go(r){location.hash='#/'+r;closeNav();}
+function openNav(){$('sidebar').classList.add('open');$('overlay').classList.add('show');}
+function closeNav(){$('sidebar').classList.remove('open');$('overlay').classList.remove('show');}
+window.addEventListener('hashchange',render);
+function render(){
+  const r=(location.hash||'').replace(/^#\/?/,'')||'dashboard';
+  route=MENUS.some(m=>m[0]===r)?r:'dashboard';
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on',n.dataset.r===route));
+  closeNav();closeDrawer();
+  ({chat:renderGroup,dashboard:loadDashboard,ledger:loadLedger,tracking:loadTracking,
+    teardown:loadTeardowns,content:loadContents,plans:loadPlans,revenue:loadRevenue,
+    experience:loadExperience,agents:loadAgents,integration:renderIntegration}[route])();
+  window.scrollTo(0,0);
+}
+
+/* ================= 总览缓存 / 环境徽标 ================= */
+let _ov={t:0,data:null};
+async function getOverview(force){
+  if(!force&&_ov.data&&Date.now()-_ov.t<10000)return _ov.data;
+  const o=await J('/api/overview');_ov={t:Date.now(),data:o};paintEnv(o);return o;}
+function paintEnv(o){
+  const cm=$('collectorMode');
+  cm.textContent='数据源：'+(o.collector_mode==='mock'?'模拟源':'第三方平台');
+  cm.className='badge '+(o.collector_mode==='mock'?'warn':'on');
+  const lb=$('llmBadge');
+  lb.textContent=o.llm?'LLM：已接入':'LLM：内置模板';
+  lb.className='badge '+(o.llm?'on':'');
+  $('pipeBadgeM').style.display=o.pipeline_running?'':'none';
+}
+
+/* ================= 1. 今日作战台 ================= */
+let _alerts=[];
+async function loadDashboard(){
+  const [o,alerts,series,contents]=await Promise.all(
+    [getOverview(true),J('/api/alerts'),J('/api/series/revenue'),J('/api/contents')]);
+  _alerts=alerts;
+  const k=o.kpi,team=o.team;
+  const flow=(o.flow&&o.flow.length)?o.flow:FLOW.map(f=>{
+    const a=team.find(x=>x.key===f.agent)||{};
+    return {step:f.step,agent:(ROLE_META[f.agent]||{}).name||f.agent,done:(a.today_runs||0)>0};});
+  const doneCnt=flow.filter(f=>f.done).length;
+  const rate=Math.round(doneCnt/flow.length*100);
+  const dramas=(series.by_drama||[]).length;
+  const vids=contents.filter(c=>c.status==='已发布').length;
+  let firstPending=false;
+  $('page').innerHTML=`
+  <div class="page-h">
+    <div><h2>今日作战台</h2>
+      <div class="sub">AI 自运营系统每日流水线实时状态总览 ｜ 数据更新于 <span id="updTime">${new Date().toLocaleTimeString('zh-CN',{hour12:false})}</span></div></div>
+    <button class="btn primary" onclick="runPipeline()">▶ 一键今日流程</button>
+  </div>
+  ${o.pipeline_running?'<div class="card" style="border-color:var(--accent);color:var(--accent);padding:10px 16px">⣿ 每日流程执行中…</div>':''}
+  <div class="kpis">
+    <div class="kpi"><div class="v" style="color:var(--accent)">¥${fmt(k.today_revenue)}</div><div class="l">今日分成收入</div></div>
+    <div class="kpi"><div class="v" style="color:var(--cyan)">${dramas}</div><div class="l">挂载剧目数</div></div>
+    <div class="kpi"><div class="v" style="color:var(--cyan)">${vids}</div><div class="l">总挂载视频数</div><div class="s">待审 ${k.pending_contents} 条</div></div>
+    <div class="kpi"><div class="v" style="color:var(--red)">${k.late_booms}</div><div class="l">今日爆款对标</div><div class="s">今日新入库 ${k.today_new} ｜ 追踪中 ${k.tracking}</div></div>
+    <div class="kpi"><div class="v" style="color:var(--green)">${rate}%</div><div class="l">AI任务完成率</div><div class="s">${doneCnt}/${flow.length} 步已完成</div></div>
+  </div>
+  <div class="card"><div class="card-t">今日流水线进度</div>
+    <div class="flow">${flow.map(f=>{
+      let cls=f.done?'done':'';
+      if(!f.done&&o.pipeline_running&&!firstPending){cls='flowing';firstPending=true;}
+      return `<div class="step ${cls}"><b>${f.done?'✅':'⏳'} ${esc(f.step)}</b>${esc(f.agent||'')}</div>`;}).join('')}</div>
+  </div>
+  <div class="card"><div class="card-t">AI 角色状态（点击进入私聊）</div>
+    ${team.map(a=>{const m=ROLE_META[a.key]||{name:a.name,color:'#8b90a5',ch:(a.name||'?')[0],duty:''};
+      return `<div class="agent" onclick="openAgentChat('${a.key}')">
+      <div class="av" style="background:${m.color}">${m.ch}</div>
+      <div style="flex:1;min-width:0"><div class="nm">${m.name} <span class="mini">今日${a.today_runs}次运行</span></div>
+      <div class="st">${a.last?`<span class="dot" style="background:${a.last.status==='ok'?'#34d399':a.last.status==='skip'?'#fbbf24':'#f87171'}"></span>${esc(a.last.action)} · ${esc((a.last.detail||'').slice(0,40))}`:'待命中'}</div></div>
+      <span class="dim">›</span></div>`;}).join('')}
+  </div>
+  <div class="card"><div class="card-t">最新告警</div><div id="alertPrev">${alertPrevHtml()}</div></div>`;
+}
+function alertPrevHtml(){
+  if(!_alerts.length)return '<div class="empty">暂无告警</div>';
+  return _alerts.slice(0,3).map(r=>`<div class="alert-item ${esc(r.level)} ${r.handled?'':'unread'}" onclick="markRead(${r.id})">
+    <b>[${esc(r.type)}]</b> ${esc(r.content)}${r.handled?'':'<span class="uread">未读</span>'}
+    <div class="mini">${esc(r.created_at)}${r.handled?' · 已读':' · 点击标记已读'}</div></div>`).join('');
+}
+async function markRead(id){
+  const r=_alerts.find(x=>x.id===id);if(r)r.handled=1;
+  const el=$('alertPrev');if(el)el.innerHTML=alertPrevHtml();
+  try{await J(`/api/alerts/${id}/read`,{method:'POST'});}catch(e){}
+}
+async function runPipeline(){
+  await J('/api/pipeline/daily',{method:'POST'});
+  toast('已触发今日流程，角色们开始干活了');setTimeout(loadDashboard,2000);
+}
+
+/* ================= 2. 团队群聊 ================= */
+let _teamCache=[];
+async function renderGroup(){
+  const [rows,o]=await Promise.all([J('/api/group/history'),getOverview()]);
+  _teamCache=o.team;
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>团队群聊</h2>
+    <div class="sub">@ 点名角色干活，不@时由主管统筹应答</div></div></div>
+  <div class="card chatwrap">
+    <div class="gmsgs" id="groupMsgs">${rows.length?rows.map(groupMsgHtml).join(''):
+      `<div class="empty">群里还很安静。<br>点下方 @ 按钮点名，或 @所有人 让全员汇报。</div>`}</div>
+    <div class="atchips">
+      <span class="atchip" onclick="atText('@所有人 ')">@所有人</span>
+      ${o.team.map(a=>{const m=ROLE_META[a.key]||{name:a.name,color:'#8b90a5'};
+        return `<span class="atchip" style="border-color:${m.color}55" onclick="atText('@${m.name} ')">@${m.name}</span>`;}).join('')}
+      <span class="atchip" style="border-color:var(--accent);color:var(--accent)" onclick="startMeeting()">📢 开会</span>
+    </div>
+    <div class="chatbar">
+      <input class="chat-input" id="groupInput" placeholder="@所有人 汇报今天情况 ｜ @对标 有什么新发现 ｜ @内容 出条推广"
+             onkeydown="if(event.key==='Enter')sendGroup()">
+      <button class="btn primary" onclick="sendGroup()">发送</button>
+    </div>
+    <div class="hint" id="meetingHint" style="display:none;color:var(--accent)">📢 会议进行中…</div>
+    <div class="hint">点「🧠 深度思考过程」可看每个角色的数据推理链路</div>
+  </div>`;
+  const box=$('groupMsgs');box.scrollTop=box.scrollHeight;
+}
+function groupMsgHtml(m){
+  const isBoss=m.sender==='boss';
+  const meta=ROLE_META[m.sender];
+  const ch=isBoss?'我':(meta?meta.ch:(m.sender_title||'?')[0]);
+  const think=m.think?`<details class="think"><summary>🧠 深度思考过程</summary><pre>${esc(m.think)}</pre></details>`:'';
+  return `<div class="gmsg ${isBoss?'gboss':''}"><div class="gav" style="background:${m.color||'#64748b'}">${ch}</div>
+    <div class="gbody"><div class="gname"><b>${esc(m.sender_title)}</b>${isBoss?'':(meta?meta.duty:'')} · ${ts(m.created_at)}</div>
+    ${think}<div class="gbubble">${esc(m.content)}</div></div></div>`;
+}
+function atText(t){const i=$('groupInput');i.value+=t;i.focus();}
+async function sendGroup(){
+  const inp=$('groupInput'),msg=inp.value.trim();if(!msg)return;
+  inp.value='';
+  const box=$('groupMsgs');
+  if(box.querySelector('.empty'))box.innerHTML='';
+  box.innerHTML+=groupMsgHtml({sender:'boss',sender_title:'老板',color:'#64748b',content:msg,created_at:new Date().toISOString()});
+  const thinking=document.createElement('div');
+  thinking.innerHTML=`<div class="gmsg"><div class="gav" style="background:#334155">…</div>
+    <div class="gbody"><div class="gname"><b>团队</b></div><div class="gbubble">🧠 被点名的成员正在调取各自数据、深度思考中…</div></div></div>`;
+  box.appendChild(thinking);box.scrollTop=box.scrollHeight;
+  try{
+    await J('/api/group/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+  }finally{
+    thinking.remove();
+    const rows=await J('/api/group/history');
+    box.innerHTML=rows.map(groupMsgHtml).join('');box.scrollTop=box.scrollHeight;
+  }
+}
+async function pollGroup(){
+  const box=$('groupMsgs');
+  if(!box||box.querySelector('.empty')||meetingOn)return;
+  const rows=await J('/api/group/history');
+  if(rows.length>box.querySelectorAll('.gmsg').length){
+    box.innerHTML=rows.map(groupMsgHtml).join('');box.scrollTop=box.scrollHeight;}
+}
+
+/* -------- 开会：逐条 700ms 追加会议消息 -------- */
+let meetingOn=false;
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function startMeeting(){
+  if(meetingOn)return;
+  const topic=prompt('输入会议议题（留空=今日运营晨会）','');
+  if(topic===null)return;
+  meetingOn=true;
+  const hint=$('meetingHint');if(hint)hint.style.display='';
+  const box=$('groupMsgs');
+  if(box.querySelector('.empty'))box.innerHTML='';
+  try{
+    const r=await J('/api/group/meeting',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic:topic||''})});
+    for(const m of (r.messages||[])){
+      box.innerHTML+=groupMsgHtml({sender:m.key,sender_title:m.title,color:m.color,
+        think:m.think,content:m.answer,created_at:new Date().toISOString()});
+      box.scrollTop=box.scrollHeight;
+      await sleep(700);
+    }
+  }catch(e){toast('会议发起失败，请重试');}
+  meetingOn=false;
+  if(hint)hint.style.display='none';
+  const rows=await J('/api/group/history');
+  box.innerHTML=rows.map(groupMsgHtml).join('');box.scrollTop=box.scrollHeight;
+}
+
+/* ================= 3. 对标库 ================= */
+function statusTag(r){return r.is_late_boom?'<span class="tag boom">🔥滞后爆款</span>':
+  r.track_done?'<span class="tag done">追踪完成</span>':'<span class="tag tracking">追踪中</span>';}
+function snapOf(r,d){return (r.snaps||[]).find(x=>x.day_index===d);}
+function ledgerCard(r){
+  const g=d=>snapOf(r,d)?fmt(snapOf(r,d).play):'-';
+  return `<div class="vcard">
+    <div class="cover" style="background:hsl(${r.cover_hue},55%,38%)">短剧</div>
+    <div style="flex:1;min-width:0">
+      <div class="vt">${esc(r.title)}</div>
+      <div class="mini">${esc(r.account)} · <span class="tag drama">${esc(r.drama)}</span><span class="tag hook">${esc(r.hook_type)}</span></div>
+      <div class="mini">发布 ${ts(r.publish_time)} ｜ 发现 ${ts(r.discovered_at)}</div>
+      <div class="vstats">
+        <div class="vstat"><div class="n">${g(1)}</div><div class="d">D1播放</div></div>
+        <div class="vstat"><div class="n">${g(2)}</div><div class="d">D2播放</div></div>
+        <div class="vstat"><div class="n">${g(3)}</div><div class="d">D3播放</div></div>
+        <div class="vstat" style="flex:1.4;display:flex;align-items:center;justify-content:center">${spark(r.plays,r.is_late_boom?'#f87171':'#ff7847')}</div>
+      </div>
+      <div style="margin-top:6px">${statusTag(r)}</div>
+    </div></div>`;
+}
+async function loadLedger(){
+  const [rows,reports]=await Promise.all([J('/api/ledger'),J('/api/reports/daily')]);
+  const table=`<div class="tblwrap only-d"><table><tr><th>视频</th><th>钩子</th><th>发布/发现</th>
+    <th>D1</th><th>D2</th><th>D3</th><th>72h趋势</th><th>状态</th></tr>`+
+    rows.map(r=>{const g=d=>snapOf(r,d);
+      return `<tr>
+      <td><div class="vtitle"><div class="cover" style="background:hsl(${r.cover_hue},55%,38%)">短剧</div>
+        <div><div class="t">${esc(r.title)}</div>
+        <div class="mini">${esc(r.account)} · <span class="tag drama">${esc(r.drama)}</span></div></div></div></td>
+      <td><span class="tag hook">${esc(r.hook_type)}</span></td>
+      <td class="mini">${ts(r.publish_time)}<br><span class="dim">发现 ${ts(r.discovered_at)}</span></td>
+      <td class="mono">${g(1)?fmt(g(1).play):'-'}</td><td class="mono">${g(2)?fmt(g(2).play):'-'}</td>
+      <td class="mono">${g(3)?fmt(g(3).play):'-'}</td>
+      <td>${spark(r.plays,r.is_late_boom?'#f87171':'#ff7847')}</td>
+      <td>${statusTag(r)}</td></tr>`;}).join('')+'</table></div>';
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>对标库</h2><div class="sub">同行爆款视频台账与 72h 追踪</div></div>
+    <button class="btn primary" onclick="runPatrol()">▶ 立即巡检</button></div>
+  ${rows.length?table+`<div class="only-m">${rows.map(ledgerCard).join('')}</div>`:'<div class="empty">台账为空，点击「立即巡检」</div>'}
+  <div class="page-h" style="margin-top:22px"><div><h2>对标日报</h2></div></div>
+  ${reports.length?reports.map(r=>`<div class="card"><h3>📊 ${esc(r.day)} 对标日报</h3>
+    <div>${esc(r.content)}</div><pre>${esc(r.findings)}</pre></div>`).join(''):'<div class="empty">暂无日报</div>'}`;
+}
+async function runPatrol(){
+  await J('/api/jobs/patrol',{method:'POST'});
+  toast('已触发巡检+追踪');setTimeout(loadLedger,2500);
+}
+
+/* ================= 4. 跨天追踪 ================= */
+async function loadTracking(){
+  const rows=(await J('/api/ledger')).filter(r=>!r.track_done||r.is_late_boom);
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>跨天追踪</h2><div class="sub">72h 追踪中 & 滞后爆款重点关注</div></div></div>
+  ${rows.length?rows.map(r=>{
+    const g=d=>snapOf(r,d)?snapOf(r,d).play:null;
+    const d1=g(1),d2=g(2),d3=g(3);
+    const x=(a,b)=>a&&b?`<span style="color:${b>=a?'#34d399':'#f87171'}">×${(b/a).toFixed(1)}</span>`:'';
+    return `<div class="vcard" style="${r.is_late_boom?'border-color:#7f1d1d':''}">
+    <div class="cover" style="background:hsl(${r.cover_hue},55%,38%)">短剧</div>
+    <div style="flex:1;min-width:0">
+      <div class="vt">${esc(r.title)} ${statusTag(r)}</div>
+      <div class="mini">${esc(r.account)} · <span class="tag drama">${esc(r.drama)}</span><span class="tag hook">${esc(r.hook_type)}</span></div>
+      <div class="vstats">
+        <div class="vstat"><div class="n">${d1?fmt(d1):'-'}</div><div class="d">D1播放</div></div>
+        <div class="vstat"><div class="n">${d2?fmt(d2):'-'} ${x(d1,d2)}</div><div class="d">D2播放</div></div>
+        <div class="vstat"><div class="n">${d3?fmt(d3):'-'} ${x(d2,d3)}</div><div class="d">D3播放</div></div>
+        <div class="vstat" style="flex:1.4;display:flex;align-items:center;justify-content:center">${spark(r.plays,r.is_late_boom?'#f87171':'#ff7847')}</div>
+      </div>
+      ${r.is_late_boom?'<div class="mini" style="color:#fca5a5;margin-top:6px">🔥 滞后爆款：首日低量、72h 内二次推流放大，建议立即跟进拆解</div>':''}
+    </div></div>`;}).join(''):
+  '<div class="empty">暂无追踪中的对标视频<br><span class="mini">去「对标库」点「立即巡检」采集新数据</span></div>'}`;
+}
+
+/* ================= 5. 爆款拆解 ================= */
+async function loadTeardowns(){
+  const rows=await J('/api/deconstructions');
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>爆款拆解</h2><div class="sub">自有爆款视频结构拆解与交叉验证</div></div></div>
+  ${rows.length?rows.map(r=>{let segs=[];try{segs=JSON.parse(r.segments)}catch(e){}
+    return `<div class="card"><h3>🎞 ${esc(r.video_title)} <span class="tag drama">${esc(r.drama)}</span>
+    <span class="mini">播放${fmt(r.play)} · 完播${((r.finish_rate||0)*100).toFixed(0)}% · 转化${r.conversions}</span></h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      ${segs.map(s=>`<div class="mini" style="background:var(--card2);border-radius:8px;padding:8px 10px">
+        <b style="color:var(--accent)">${esc(s.段落)}</b><br>${esc(s.设计)}<br><span class="dim">→ ${esc(s.作用)}</span></div>`).join('')}</div>
+    ${r.factors?`<div class="mini" style="margin-top:8px"><b>起量因素：</b>${esc(r.factors)}</div>`:''}
+    <div class="mini" style="margin-top:4px"><b>封面逻辑：</b>${esc(r.hook_logic)}</div>
+    ${r.cross_validation?`<pre>${esc(r.cross_validation)}</pre>`:''}</div>`;}).join(''):'<div class="empty">暂无拆解报告</div>'}`;
+}
+
+/* ================= 6. 内容生产 ================= */
+async function loadContents(){
+  const rows=await J('/api/contents');
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>内容生产</h2><div class="sub">AI 产出脚本队列，审核后发布</div></div></div>
+  ${rows.length?rows.map(r=>{
+    let titles=[];try{titles=JSON.parse(r.titles)}catch(e){}
+    if(!titles.length&&r.title_copy)titles=[r.title_copy];
+    return `<div class="card"><h3>📹 <span class="tag drama">${esc(r.drama)}</span>
+    <span class="tag ${r.status==='待审核'?'tracking':r.status==='已发布'?'done':'boom'}">${esc(r.status)}</span></h3>
+    ${titles.map(t=>`<div style="font-weight:600;font-size:13.5px;margin-bottom:3px">· ${esc(t)}</div>`).join('')}
+    <pre>${esc(r.script)}</pre>
+    <div class="mini"><b>画面提示词：</b>${esc(r.image_prompt)}</div>
+    <div class="mini"><b>建议时段：</b>${esc(r.slot)} ｜ <b>复用模板：</b>${esc(r.template)}</div>
+    ${r.status==='待审核'?`<div><button class="act pub" onclick="pubC(${r.id})">✅ 发布</button>
+    <button class="act drop" onclick="dropC(${r.id})">❌ 淘汰</button></div>`:''}</div>`;}).join(''):'<div class="empty">暂无内容产出</div>'}`;
+}
+async function pubC(id){
+  const r=await J(`/api/contents/${id}/publish`,{method:'POST'});
+  if(r.play)toast(`已发布：播放 ${fmt(r.play)}，分成 ¥${Math.round(r.revenue)}${r.is_hot?'，判定为爆款 🔥':''}`);
+  else toast(r.error||'已处理');loadContents();}
+async function dropC(id){await J(`/api/contents/${id}/drop`,{method:'POST'});toast('已淘汰');loadContents();}
+
+/* ================= 7. 策略预案 ================= */
+async function loadPlans(){
+  const rows=await J('/api/strategies');
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>策略预案</h2><div class="sub">新剧推广预案与低效策略回溯</div></div></div>
+  ${rows.length?rows.map(r=>{let tpl=[];try{tpl=JSON.parse(r.templates)}catch(e){}
+    return `<div class="card"><h3>🎯 《${esc(r.drama)}》推广预案
+    <span class="tag ${r.status==='生效中'?'done':'boom'}">${esc(r.status)}</span>
+    <span class="tag hook">适配度：${esc(r.fit)}</span>${r.week?`<span class="tag">${esc(r.week)}</span>`:''}</h3>
+    <pre>${esc(r.direction)}</pre>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      ${tpl.map(t=>`<div class="mini" style="background:var(--card2);border-radius:8px;padding:8px 10px">
+        <b style="color:var(--yellow)">${esc(t.模板)}</b>（${esc(t.适配)}）<br>${esc(t.结构)}</div>`).join('')}</div>
+    ${r.review?`<div class="mini" style="color:var(--red);margin-top:6px">回溯结论：${esc(r.review)}</div>`:''}</div>`;}).join(''):'<div class="empty">暂无策略预案</div>'}`;
+}
+
+/* ================= 8. 分成看板 ================= */
+async function loadRevenue(){
+  const [d]=await Promise.all([J('/api/series/revenue'),getOverview()]);
+  const days=d.by_day||[],W=760,H=240;
+  const today=days[days.length-1]||{revenue:0,day:'—'},yest=days[days.length-2]||{revenue:0};
+  const delta=yest.revenue?((today.revenue-yest.revenue)/yest.revenue*100):0;
+  const mx=Math.max(...days.map(x=>x.revenue),1);
+  const pts=days.map((x,i)=>[40+i*((W-60)/Math.max(days.length-1,1)),H-34-(x.revenue/mx)*(H-64)]);
+  const line=pts.map(p=>p.map(v=>v.toFixed(1)).join(',')).join(' ');
+  const area=`40,${H-34} `+line+` ${W-20},${H-34}`;
+  const dmax=Math.max(...(d.by_drama||[]).map(x=>x.revenue),1);
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>分成看板</h2><div class="sub">近 14 日挂载分成趋势</div></div></div>
+  <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi"><div class="v" style="color:var(--accent)">¥${fmt(today.revenue)}</div><div class="l">今日分成</div></div>
+    <div class="kpi"><div class="v">¥${fmt(yest.revenue)}</div><div class="l">昨日分成</div></div>
+    <div class="kpi"><div class="v" style="color:${delta>=0?'#34d399':'#f87171'}">${delta>=0?'+':''}${delta.toFixed(1)}%</div><div class="l">环比</div></div>
+  </div>
+  <div class="card"><div class="card-t">近14日分成趋势</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ff7847" stop-opacity=".35"/><stop offset="1" stop-color="#ff7847" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="${area}" fill="url(#g)"/><polyline points="${line}" fill="none" stroke="#ff7847" stroke-width="2"/>
+    ${pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#ff7847"/>
+      <text x="${p[0]}" y="${H-12}" fill="#8b90a5" font-size="10" text-anchor="middle">${days[i].day.slice(5)}</text>
+      <text x="${p[0]}" y="${p[1]-8}" fill="#ff7847" font-size="10" text-anchor="middle">¥${fmt(days[i].revenue)}</text>`).join('')}
+    </svg></div>
+  <div class="card"><div class="card-t">剧目分成占比</div>
+    ${(d.by_drama||[]).map(x=>`<div style="margin-bottom:10px"><span class="mini">${esc(x.title)}</span>
+      <div style="background:#232839;border-radius:4px;height:14px;margin-top:3px">
+      <div style="width:${(x.revenue/dmax*100).toFixed(0)}%;height:100%;border-radius:4px;background:linear-gradient(90deg,#ff7847,#fbbf24)"></div></div>
+      <span class="mini mono">¥${x.revenue.toFixed(0)}</span></div>`).join('')||'<div class="empty">暂无分成记录</div>'}</div>`;
+}
+
+/* ================= 9. 经验库 ================= */
+async function loadExperience(){
+  const rows=await J('/api/experience');
+  const sc=r=>r.score>=80?'#34d399':r.score>=60?'#fbbf24':'#f87171';
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>经验库</h2><div class="sub">沉淀的有效打法与规律</div></div></div>
+  ${rows.length?`
+  <div class="card tblwrap only-d"><table><tr><th>评分</th><th>分类</th><th>经验</th><th>来源</th><th>周</th></tr>
+    ${rows.map(r=>`<tr><td class="mono" style="color:${sc(r)};font-weight:700">${r.score}</td>
+    <td><span class="tag">${esc(r.category)}</span></td><td>${esc(r.content)}</td>
+    <td class="mini">${esc(r.source)}</td><td class="mini">${esc(r.week)}</td></tr>`).join('')}</table></div>
+  <div class="only-m">${rows.map(r=>`<div class="card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span class="mono" style="color:${sc(r)};font-weight:700;font-size:18px">${r.score}</span>
+      <span class="tag">${esc(r.category)}</span><span class="mini">${esc(r.week)}</span></div>
+    <div style="font-size:13px">${esc(r.content)}</div>
+    <div class="mini" style="margin-top:4px">来源：${esc(r.source)}</div></div>`).join('')}</div>`
+  :'<div class="empty">暂无经验沉淀</div>'}`;
+}
+
+/* ================= 10. 角色中心 ================= */
+async function loadAgents(){
+  const o=await getOverview(true);
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>角色中心</h2><div class="sub">点击角色卡片进入私聊，可直接安排任务</div></div></div>
+  <div class="agrid">${o.team.map(a=>{const m=ROLE_META[a.key]||{name:a.name,color:'#8b90a5',ch:'?',duty:''};
+    return `<div class="acard" onclick="openAgentChat('${a.key}')">
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px">
+      <div class="av" style="background:${m.color}">${m.ch}</div>
+      <div><div style="font-weight:700;font-size:15px">${m.name}</div>
+      <div class="mini">${m.duty}</div></div></div>
+    <div class="mini">今日运行 <b style="color:var(--accent)">${a.today_runs}</b> 次</div>
+    <div class="mini" style="margin-top:4px">${a.last?`<span class="dot" style="background:${a.last.status==='ok'?'#34d399':a.last.status==='skip'?'#fbbf24':'#f87171'}"></span>最近：${esc(a.last.action)} · ${esc((a.last.detail||'').slice(0,50))}`:'待命中'}</div>
+    ${a.last?`<div class="mini dim">${ts(a.last.started_at)}</div>`:''}</div>`;}).join('')}</div>`;
+}
+
+/* -------- 私聊抽屉 -------- */
+let curChat=null;
+function openAgentChat(key){
+  const m=ROLE_META[key]||{name:key};
+  curChat={key,name:m.name};
+  if(route!=='agents')location.hash='#/agents';
+  $('drawerTitle').textContent='💬 '+m.name;
+  $('drawer').classList.add('open');
+  drawerTab('chat');
+  J(`/api/agents/${key}/runs`).then(rows=>{
+    $('logPane').innerHTML=rows.length?rows.map(r=>
+      `<div class="log"><span class="a">[${esc(r.action)}]</span> <span class="dim">${esc(r.started_at)}</span><br>${esc(r.detail)}</div>`
+    ).join(''):'<div class="empty">暂无运行记录</div>';});
+}
+function closeDrawer(){$('drawer').classList.remove('open');}
+function drawerTab(t){
+  $('dtabChat').classList.toggle('on',t==='chat');
+  $('dtabLog').classList.toggle('on',t==='log');
+  $('chatPane').style.display=t==='chat'?'flex':'none';
+  $('logPane').style.display=t==='log'?'':'none';
+  if(t==='chat')loadChat();
+}
+async function loadChat(){
+  if(!curChat)return;
+  const rows=await J(`/api/chat/${curChat.key}/history`);
+  const box=$('chatBox');
+  box.innerHTML=rows.length?rows.map(m=>
+    `<div class="msg ${m.role==='user'?'user':'agent'}">${esc(m.content)}<div class="t">${ts(m.created_at)}</div></div>`
+  ).join(''):`<div class="empty">我是「${curChat.name}」，直接问我业务问题，或让我干活，比如：<br>「今天有什么发现」/「帮我出条内容」/「开个早会」</div>`;
+  box.scrollTop=box.scrollHeight;
+}
+async function sendChat(){
+  if(!curChat)return;
+  const inp=$('chatInput'),msg=inp.value.trim();if(!msg)return;
+  inp.value='';
+  const box=$('chatBox');
+  if(box.querySelector('.empty'))box.innerHTML='';
+  box.innerHTML+=`<div class="msg user">${esc(msg)}</div><div class="msg agent" id="typing">正在思考…</div>`;
+  box.scrollTop=box.scrollHeight;
+  try{
+    const r=await J(`/api/chat/${curChat.key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    const tp=$('typing');if(tp)tp.remove();
+    const think=r.think?`<details class="think"><summary>🧠 深度思考过程</summary><pre>${esc(r.think)}</pre></details>`:'';
+    box.innerHTML+=`<div class="msg agent">${think}${esc(r.answer||'（无回复）')}</div>`;
+  }catch(e){const tp=$('typing');if(tp)tp.textContent='（回复失败，请重试）';}
+  box.scrollTop=box.scrollHeight;
+}
+
+/* ================= 11. 数据接入 ================= */
+function dlCsv(name,header,sample){
+  const csv='﻿'+header+'\n'+sample;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=name;a.click();
+}
+async function uploadCsv(api,inputId,tipId){
+  const f=$(inputId).files[0];
+  if(!f){$(tipId).textContent='请先选择 CSV 文件';return;}
+  const fd=new FormData();fd.append('file',f);
+  $(tipId).textContent='上传中…';
+  try{
+    const r=await(await fetch(api,{method:'POST',body:fd})).json();
+    $(tipId).textContent=r.error?('❌ '+r.error):(r.imported!==undefined?`✅ 成功导入 ${r.imported} 条记录，团队数据已更新`:'✅ 操作成功，刷新页面查看');
+  }catch(e){$(tipId).textContent='❌ 上传失败：'+e.message;}
+}
+async function submitManual(api,fields,tipId){
+  const data={};
+  for(const [k,id] of Object.entries(fields)) data[k]=$(id).value.trim();
+  $(tipId).textContent='提交中…';
+  try{
+    const r=await(await fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
+    $(tipId).textContent=r.error?('❌ '+r.error):'✅ 已保存，团队数据已更新';
+    if(!r.error) for(const id of Object.values(fields)) if(!id.startsWith('m-day')) $(id).value='';
+  }catch(e){$(tipId).textContent='❌ 提交失败：'+e.message;}
+}
+function mInput(id,ph,type){
+  return `<input id="${id}" type="${type||'text'}" placeholder="${ph}" inputmode="${type==='number'?'decimal':'text'}" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a2e3f;background:#10131c;color:#e8eaf0;font-size:14px;box-sizing:border-box">`;
+}
+async function renderIntegration(){
+  const o=await getOverview();
+  const today=new Date().toISOString().slice(0,10);
+  $('page').innerHTML=`
+  <div class="page-h"><div><h2>数据接入</h2><div class="sub">把视频号真实数据喂给 AI 团队</div></div></div>
+
+  <div class="card"><div class="card-t">当前状态</div>
+    <div>同行数据源：<span class="badge ${o.collector_mode==='mock'?'warn':'on'}">${o.collector_mode==='mock'?'模拟数据（mock）':'第三方平台已接入'}</span>
+    <span class="mini" style="margin-left:8px">接入真实数据后，巡检/追踪/拆解/复盘自动全部切换为真实数据</span></div></div>
+
+  <div class="card" style="border-color:#ff7847"><div class="card-t">✍️ 手动录入分成（推荐，最简单）</div>
+    <div class="mini" style="margin-bottom:10px">打开你的<b>分销平台后台</b>看着收益报表，照着填就行，一条剧目填一次：</div>
+    <div style="display:grid;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${mInput('m-day','日期', 'date')}
+        ${mInput('m-drama','剧名（如：千金归来）')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        ${mInput('m-play','播放量','number')}
+        ${mInput('m-conv','转化数','number')}
+        ${mInput('m-rev','分成金额(元)','number')}
+      </div>
+      <button class="btn pri" style="padding:12px;font-size:15px" onclick="submitManual('/api/import/share_manual',{day:'m-day',drama_title:'m-drama',play:'m-play',conversions:'m-conv',revenue:'m-rev'},'m-tip')">保存这条分成数据</button>
+      <div class="mini" id="m-tip"></div>
+    </div></div>
+
+  <div class="card"><div class="card-t">✍️ 手动录入单条视频数据</div>
+    <div class="mini" style="margin-bottom:10px">打开<b>视频号助手</b>→ 内容管理，看着某条已发布视频的数据填：</div>
+    <div style="display:grid;gap:8px">
+      ${mInput('v-title','视频标题（如：第3集 她重生后杀疯了）')}
+      ${mInput('v-drama','挂载的剧名')}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        ${mInput('v-play','播放量','number')}
+        ${mInput('v-like','点赞','number')}
+        ${mInput('v-rev','这条的分成(元)','number')}
+      </div>
+      <button class="btn pri" style="padding:12px;font-size:15px" onclick="submitManual('/api/import/video_manual',{title:'v-title',drama_title:'v-drama',play:'v-play',likes:'v-like',revenue:'v-rev'},'v-tip')">保存这条视频数据</button>
+      <div class="mini" id="v-tip"></div>
+    </div></div>
+
+  <details class="card"><summary style="cursor:pointer;font-weight:600">📁 批量导入（CSV 文件，数据量大时用）</summary>
+    <div style="margin-top:10px;font-size:13px;line-height:1.8">
+    <b>① 分成数据</b>（分销平台后台导出报表）：表头 <span class="mini">day,drama_title,play,conversions,revenue</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+      <input type="file" id="f-share" accept=".csv" style="font-size:13px">
+      <button class="btn pri" onclick="uploadCsv('/api/import/share_records','f-share','tip-share')">上传</button>
+      <button class="btn" onclick="dlCsv('分成数据模板.csv','day,drama_title,play,conversions,revenue','2026-11-07,xxxx剧名,125000,86,642.50')">下载模板</button>
+    </div><div class="mini" id="tip-share"></div>
+    <b>② 自有视频数据</b>（视频号助手后台整理）：表头 <span class="mini">title,drama_title,publish_time,play,likes,comments,finish_rate,mount_clicks,conversions,revenue</span>（仅前两项必填）
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+      <input type="file" id="f-video" accept=".csv" style="font-size:13px">
+      <button class="btn pri" onclick="uploadCsv('/api/import/own_videos','f-video','tip-video')">上传</button>
+      <button class="btn" onclick="dlCsv('视频数据模板.csv','title,drama_title,publish_time,play,likes,comments,finish_rate,mount_clicks,conversions,revenue','第3集|她重生后杀疯了,xxxx剧名,2026-11-06 19:00,58000,3200,410,0.42,2150,63,318.00')">下载模板</button>
+    </div><div class="mini" id="tip-video"></div></div></details>
+
+  <div class="card"><div class="card-t">③ 同行数据自动巡检（第三方数据平台 API）</div>
+    <div style="font-size:13px;line-height:1.8">同行账号的播放/互动数据无官方接口，需购买第三方数据平台（新视/友望/蝉妈妈等）的 API 服务，然后设置环境变量并重启：</div>
+    <pre>COLLECTOR_MODE=thirdparty
+COLLECTOR_API=&lt;第三方数据平台接口地址&gt;
+COLLECTOR_KEY=&lt;授权密钥&gt;</pre>
+    <div class="mini">接入后「对标库 / 跨天追踪」按巡检周期（当前 ${Math.round((o.patrol_interval||1800)/60)} 分钟）自动采集真实同行数据。</div></div>
+
+  <div class="card"><div class="card-t">💾 数据备份（防丢）</div>
+    <div style="font-size:13px;line-height:1.8">免费服务器偶尔会重启导致数据清空，建议每周点一次「下载备份」。数据丢了就用下面恢复：</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <a class="btn pri" href="/api/backup" download="ops_backup.db" style="text-decoration:none;display:inline-block">⬇️ 下载备份</a>
+      <input type="file" id="f-restore" accept=".db" style="font-size:13px">
+      <button class="btn" onclick="uploadCsv('/api/restore','f-restore','tip-restore')">恢复备份</button>
+    </div>
+    <div class="mini" id="tip-restore" style="margin-top:6px"></div></div>
+
+  <div class="card"><div class="card-t">数据从哪抄？</div>
+    <div style="font-size:13px;line-height:1.9;color:#aab">
+    <b>分成数据</b> → 你开通剧目挂载分佣的<b>分销平台后台</b>（点众/九州/容量等）→ 收益/数据中心 → 看每个剧目每天的播放、转化、结算金额，抄到上面的表单里。<br>
+    <b>视频数据</b> → 微信里搜「视频号助手」小程序或电脑打开 channels.weixin.qq.com → 内容管理 → 点进每条视频看播放和点赞，抄到上面的表单里。<br>
+    视频号官方没有给创作者开放数据接口，所以无法全自动抓取。每天花 1 分钟填一次，AI 团队就基于你的真实数据运转。如果你的分销平台有数据 API，把接口文档发我，我帮你对接成全自动。</div></div>`;
+  $('m-day').value=today;
+}
+
+/* ================= 轮询 ================= */
+setInterval(async()=>{           // 群聊页 4 秒轮询
+  if(route==='chat'){try{await pollGroup();}catch(e){}}
+},4000);
+setInterval(async()=>{           // 作战台 15 秒轮询
+  if(route==='dashboard'){try{await loadDashboard();}catch(e){}}
+},15000);
+
+render();
+</script>
+</body>
+</html>

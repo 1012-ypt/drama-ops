@@ -1,0 +1,15 @@
+{
+  "name": "AI 运营工作台",
+  "short_name": "AI运营台",
+  "description": "视频号剧目挂载分佣 · AI 自运营团队",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0f17",
+  "theme_color": "#0d0f17",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
