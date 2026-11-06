@@ -45,6 +45,11 @@ def _shutdown():
     scheduler.stop()
 
 
+@app.get("/api/health")
+def health():
+    return {"ok": True}
+
+
 # ---------------- 总览 ----------------
 @app.get("/api/overview")
 def overview():
